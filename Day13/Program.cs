@@ -1,9 +1,7 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using System.Numerics;
-using System.Text;
+﻿using System.Text;
 using Common;
 
-namespace Day25;
+namespace Day13;
 
 internal static class Program
 {

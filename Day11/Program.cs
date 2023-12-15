@@ -1,9 +1,7 @@
 ﻿using System.Drawing;
-using System.Numerics;
-using System.Text;
 using Common;
 
-namespace Day25;
+namespace Day11;
 
 internal static class Program
 {

@@ -1,8 +1,6 @@
 ﻿using System.Diagnostics;
-using System.Numerics;
-using System.Text;
 
-namespace Day25;
+namespace Day12;
 
 internal static class Program
 {

@@ -1,10 +1,7 @@
-﻿using System.Collections;
-using System.ComponentModel.DataAnnotations.Schema;
-using System.Drawing;
-using System.Numerics;
+﻿using System.Drawing;
 using Common;
 
-namespace Day2023_10;
+namespace Day10;
 
 internal static class Program
 {

@@ -1,8 +1,7 @@
-﻿using System.Diagnostics;
-using System.Drawing;
+﻿using System.Drawing;
 using Common;
 
-namespace Day1;
+namespace Day14;
 
 internal static class Program
 {
