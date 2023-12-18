@@ -337,14 +337,6 @@ internal static class Program
         var result = new List<Point>();
         var maxX = modifiedMap.GetLength(0) - 1;
         var maxY = modifiedMap.GetLength(1) - 1;
-
-        // for (int x = 0; x < modifiedMap.GetLength(0); x++)
-        // {
-        //     for (int y = 0; y < modifiedMap.GetLength(1); y++)
-        //     {
-        //         if(modifiedMap[x, y] == '\0') result.Add(new Point(x, y));
-        //     }
-        // }
         
         for (int x = 0; x < modifiedMap.GetLength(0); x++)
         {
