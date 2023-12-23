@@ -1,6 +1,6 @@
-﻿using System.Collections;
+﻿namespace Day20;
 
-namespace Day20;
+using Pulse = (bool Signal, string ReceiverId, string SenderId);
 
 internal static class Program
 {
@@ -24,7 +24,7 @@ internal static class Program
         };
         for (int i = 1; i <= 1000; i++)
         {
-            var (numberOfPulses, numberOfPulsesToRx) = ProcessButtonPress(modules);
+            var numberOfPulses = ProcessButtonPress(modules);
             totalNumberOfPulses[true] += numberOfPulses[true];
             totalNumberOfPulses[false] += numberOfPulses[false];
             Console.WriteLine($"Tick {i}");
@@ -36,60 +36,103 @@ internal static class Program
     private static void Task2(string inputPath)
     {
         var modules = ParseInput(inputPath);
+        var relevantModule = (ConjunctionModule)modules["qb"];
 
-        var counter = 1;
+        var countersPerModuleInputs = new Dictionary<string, long>();
+        
+        var counter = 1L;
         while(true)
         {
-            var (numberOfPulses, numberOfPulsesToRx) = ProcessButtonPress(modules);
-            
-            if(numberOfPulsesToRx == 1) break;
-            Console.WriteLine($"Tick {counter}: {numberOfPulsesToRx}");
+            var relevantSignals = GetSignalsToModule(modules, relevantModule.Id);
+            foreach (var signal in relevantSignals.Where(x=>x.Signal))
+            {
+                countersPerModuleInputs[signal.SenderId] = counter;
+            }
+
+            if (relevantModule.State.All(x => countersPerModuleInputs.ContainsKey(x.Key)))
+            {
+                break;
+            }
 
             counter++;
         }
 
-        Console.WriteLine($"Result: {counter}");
+        Console.WriteLine($"Result: {countersPerModuleInputs.Values.Aggregate(1L, (acc, val) => acc * val)}");
     }
-
-    private static (Dictionary<bool, long> numberOfpulses, long numberOfPulsesToRx) ProcessButtonPress(Dictionary<string, Module> modules)
+    
+    private static List<Pulse> GetSignalsToModule(Dictionary<string, IModule> modules, string moduleId)
     {
-        var queue = new Queue<(bool Signal, string ReceiverId, string SenderId)>();
+        var queue = new Queue<Pulse>();
         queue.Enqueue((false, "broadcaster", "button"));
+        var result = new List<Pulse>();
+    
+        while (queue.TryDequeue(out var pulse))
+        {
+            var (signal, receiverId, senderId) = pulse;
 
+            if (receiverId == moduleId)
+            {
+                result.Add(pulse);
+            }
+            
+            if (modules.TryGetValue(receiverId, out var currentModule))
+            {
+                foreach (var newPulse in currentModule.ProcessSignal(signal, senderId))
+                {
+                    queue.Enqueue(newPulse);
+                }
+            }
+        }
+
+        return result;
+    }
+    
+    private static Dictionary<bool, long> ProcessButtonPress(Dictionary<string, IModule> modules)
+    {
+        var queue = new Queue<Pulse>();
+        queue.Enqueue((false, "broadcaster", "button"));
+    
         var numberOfPulses = new Dictionary<bool, long>
         {
             { false, 0 },
             { true, 0 }
         };
-        var numberOfPulsesToRx = 0;
-
-        while (queue.Any())
+        while (queue.TryDequeue(out var pulse))
         {
-            var (signal, receiverId, senderId) = queue.Dequeue();
+            var (signal, receiverId, senderId) = pulse;
             numberOfPulses[signal] += 1;
-
-            if (receiverId == "rx") numberOfPulsesToRx++;
-            
-            if (modules.TryGetValue(receiverId, out var currentModule))
+    
+            if (modules.TryGetValue(receiverId, out var receiverModule))
             {
-                var recipients = currentModule.ProcessSignal(signal, senderId, modules);
-                foreach (var recipient in recipients)
+                foreach (var newPulse in receiverModule.ProcessSignal(signal, senderId))
                 {
-                    queue.Enqueue((currentModule.State, recipient, currentModule.Id));
+                    queue.Enqueue(newPulse);
                 }
             }
         }
-
-        return (numberOfPulses, numberOfPulsesToRx);
+    
+        return numberOfPulses;
     }
 
-    private static Dictionary<string, Module> ParseInput(string inputPath)
+    private static Dictionary<string, IModule> ParseInput(string inputPath)
     {
         var input = File.ReadAllLines(inputPath);
-        var modules = new Dictionary<string, Module>();
+        var modules = new Dictionary<string, IModule>();
         foreach (var line in input)
         {
-            var module = Module.Parse(line);
+            var parts = line.Split("->", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            var id = parts[0];
+            var outputs = parts[1].Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .ToList();
+
+            IModule module = id[0] switch
+            {
+                '%' => new FlipFlopModule(id[1..], outputs),
+                '&' => new ConjunctionModule(id[1..], outputs),
+                _ => new BroadcastModule(id, outputs),
+            };
+            
+            //var module = Module.Parse(line);
             modules.Add(module.Id, module);
         }
 
@@ -99,7 +142,7 @@ internal static class Program
             {
                 if (modules.TryGetValue(outputId, out var output))
                 {
-                    if (output.Type == '&') output.Memory.Add(module.Id, false);
+                    if (output is ConjunctionModule conjunctionModule) conjunctionModule.State.Add(module.Id, false);
                 }
             }
         }
@@ -108,53 +151,79 @@ internal static class Program
     }
 }
 
-public class Module
+public interface IModule
 {
     public string Id { get; set; }
     
-    public char Type { get; set; }
+    public List<string> Outputs { get; set; }
+
+    public IEnumerable<Pulse> ProcessSignal(bool signal, string senderId);
+}
+
+public class BroadcastModule : IModule
+{
+    public BroadcastModule(string id, List<string> outputs)
+    {
+        Id = id;
+        Outputs = outputs;
+    }
+
+    public string Id { get; set; }
+    
+    public List<string> Outputs { get; set; }
+
+    public IEnumerable<Pulse> ProcessSignal(bool signal, string senderId)
+    {
+        return Outputs.Select(output => (signal, output, Id));
+    }
+}
+
+public class FlipFlopModule : IModule
+{
+    public FlipFlopModule(string id, List<string> outputs)
+    {
+        Id = id;
+        Outputs = outputs;
+        State = false;
+    }
+
+    public string Id { get; set; }
     
     public List<string> Outputs { get; set; }
     
     public bool State { get; set; }
-
-    public Dictionary<string, bool> Memory { get; set; } = new Dictionary<string, bool>();
-
-    public static Module Parse(string line)
+    
+    public IEnumerable<Pulse> ProcessSignal(bool signal, string senderId)
     {
-        var parts = line.Split("->", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        var type = parts[0].First();
-        var id = type == 'b' ? parts[0] : parts[0].Substring(1);
-        var outputs = parts[1].Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-
-        return new Module()
-        {
-            Id = id,
-            Type = type,
-            Outputs = outputs.ToList(),
-            State = false,
-        };
-    }
-
-    public List<string> ProcessSignal(bool signal, string senderId, Dictionary<string, Module> modules)
-    {
-        if (Type == '%' && signal == false)
+        if (!signal)
         {
             State = !State;
-            return Outputs;
-        }
-        else if (Type == '&')
-        {
-            Memory[senderId] = signal;
-            State = Memory.Values.Any(x => x != true);
-            return Outputs;
-        }
-        else if (Type == 'b')
-        {
-            State = signal;
-            return Outputs;
+            return Outputs.Select(output => (State, output, Id));
         }
 
         return [];
+    }
+}
+
+public class ConjunctionModule : IModule
+{
+    public ConjunctionModule(string id, List<string> outputs)
+    {
+        Id = id;
+        Outputs = outputs;
+        State = new Dictionary<string, bool>();
+    }
+
+    public string Id { get; set; }
+    
+    public List<string> Outputs { get; set; }
+    
+    public Dictionary<string, bool> State { get; set; }
+    
+    public IEnumerable<Pulse> ProcessSignal(bool signal, string senderId)
+    {
+        State[senderId] = signal;
+        bool outputSignal = !State.Values.All(x => x);
+        return Outputs.Select(output => (outputSignal, output, Id));
     }
 }
